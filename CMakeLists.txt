@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(scheduler_core
     src/core/Task.cpp
     src/core/Job.cpp
+    src/storage/InMemoryJobRepository.cpp
 )
 target_include_directories(scheduler_core
     PUBLIC
