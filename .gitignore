@@ -28,6 +28,7 @@
 # IDE and editor files
 .idea/
 .vscode/
+.codex/
 *.user
 *.suo
 *.vcxproj*
