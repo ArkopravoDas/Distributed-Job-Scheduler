@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Threads REQUIRED)
 
 add_library(scheduler_core
+    src/concurrency/ThreadPool.cpp
     src/core/Task.cpp
     src/core/Job.cpp
     src/storage/InMemoryJobRepository.cpp
