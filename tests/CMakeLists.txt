@@ -19,3 +19,14 @@ target_link_libraries(test_thread_pool
 )
 
 add_test(NAME test_thread_pool COMMAND $<TARGET_FILE:test_thread_pool>)
+
+add_executable(test_dependency_graph
+    test_dependency_graph.cpp
+)
+
+target_link_libraries(test_dependency_graph
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_dependency_graph COMMAND $<TARGET_FILE:test_dependency_graph>)
