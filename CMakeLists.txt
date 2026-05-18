@@ -14,6 +14,7 @@ add_library(scheduler_core
     src/core/Job.cpp
     src/execution/TaskExecutor.cpp
     src/scheduling/DependencyGraph.cpp
+    src/scheduling/JobScheduler.cpp
     src/storage/InMemoryJobRepository.cpp
 )
 target_include_directories(scheduler_core

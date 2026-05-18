@@ -30,3 +30,14 @@ target_link_libraries(test_dependency_graph
 )
 
 add_test(NAME test_dependency_graph COMMAND $<TARGET_FILE:test_dependency_graph>)
+
+add_executable(test_job_scheduler
+    test_job_scheduler.cpp
+)
+
+target_link_libraries(test_job_scheduler
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_job_scheduler COMMAND $<TARGET_FILE:test_job_scheduler>)
