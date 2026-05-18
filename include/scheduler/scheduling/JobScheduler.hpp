@@ -37,6 +37,7 @@ private:
     };
 
     static bool isTerminalStatus(scheduler::core::JobStatus status);
+    static bool isTerminalTaskStatus(scheduler::core::TaskStatus status);
 
     std::vector<DependencyGraph::Dependency> buildDependencies(
         const scheduler::core::Job& job) const;

@@ -1,5 +1,6 @@
 #include "scheduler/scheduling/JobScheduler.hpp"
 
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -17,6 +18,9 @@ JobScheduler::JobScheduler(std::shared_ptr<scheduler::storage::JobRepository> re
 void JobScheduler::submitJob(scheduler::core::Job job) {
     const auto jobId = job.id();
     std::vector<scheduler::core::TaskId> readyTasks;
+    std::optional<scheduler::core::Job> jobToSave;
+    std::optional<scheduler::core::Job> jobToPersist;
+    bool shouldNotify = false;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -39,35 +43,41 @@ void JobScheduler::submitJob(scheduler::core::Job job) {
         const auto taskIds = state->job.getAllTaskIds();
         state->dependencyGraph = DependencyGraph(taskIds, buildDependencies(state->job));
         state->remainingTasks = taskIds.size();
-
-        repository_->saveJob(state->job);
         jobs_.emplace(jobId, state);
+        jobToSave = state->job;
 
         if (state->dependencyGraph.hasCycle()) {
             state->job.setStatus(scheduler::core::JobStatus::Failed);
             state->terminal = true;
-            repository_->updateJob(state->job);
-            condition_.notify_all();
-            return;
-        }
-
-        if (state->remainingTasks == 0) {
+            jobToPersist = state->job;
+            shouldNotify = true;
+        } else if (state->remainingTasks == 0) {
             state->job.setStatus(scheduler::core::JobStatus::Succeeded);
             state->terminal = true;
-            repository_->updateJob(state->job);
-            condition_.notify_all();
-            return;
-        }
-
-        state->job.setStatus(scheduler::core::JobStatus::Running);
-        readyTasks = state->dependencyGraph.getInitialReadyTasks();
-        for (const auto taskId : readyTasks) {
-            if (auto* task = state->job.getTask(taskId)) {
-                task->setStatus(scheduler::core::TaskStatus::Ready);
+            jobToPersist = state->job;
+            shouldNotify = true;
+        } else {
+            state->job.setStatus(scheduler::core::JobStatus::Running);
+            readyTasks = state->dependencyGraph.getInitialReadyTasks();
+            for (const auto taskId : readyTasks) {
+                if (auto* task = state->job.getTask(taskId)) {
+                    task->setStatus(scheduler::core::TaskStatus::Ready);
+                }
             }
-        }
 
-        repository_->updateJob(state->job);
+            jobToPersist = state->job;
+        }
+    }
+
+    if (jobToSave) {
+        repository_->saveJob(*jobToSave);
+    }
+    if (jobToPersist) {
+        repository_->updateJob(*jobToPersist);
+    }
+    if (shouldNotify) {
+        condition_.notify_all();
+        return;
     }
 
     scheduleTasks(jobId, readyTasks);
@@ -113,6 +123,8 @@ scheduler::core::TaskStatus JobScheduler::getTaskStatus(scheduler::core::JobId j
 }
 
 void JobScheduler::shutdown() {
+    std::vector<scheduler::core::Job> jobsToPersist;
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (shutdown_) {
@@ -123,6 +135,33 @@ void JobScheduler::shutdown() {
     }
 
     threadPool_.shutdown();
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& [jobId, state] : jobs_) {
+            if (state->terminal) {
+                continue;
+            }
+
+            for (const auto taskId : state->job.getAllTaskIds()) {
+                auto* task = state->job.getTask(taskId);
+                if (!task || isTerminalTaskStatus(task->status())) {
+                    continue;
+                }
+
+                task->setStatus(scheduler::core::TaskStatus::Cancelled);
+            }
+
+            state->job.setStatus(scheduler::core::JobStatus::Cancelled);
+            state->terminal = true;
+            jobsToPersist.push_back(state->job);
+        }
+    }
+
+    for (const auto& jobSnapshot : jobsToPersist) {
+        repository_->updateJob(jobSnapshot);
+    }
+
     condition_.notify_all();
 }
 
@@ -130,6 +169,12 @@ bool JobScheduler::isTerminalStatus(scheduler::core::JobStatus status) {
     return status == scheduler::core::JobStatus::Succeeded ||
            status == scheduler::core::JobStatus::Failed ||
            status == scheduler::core::JobStatus::Cancelled;
+}
+
+bool JobScheduler::isTerminalTaskStatus(scheduler::core::TaskStatus status) {
+    return status == scheduler::core::TaskStatus::Succeeded ||
+           status == scheduler::core::TaskStatus::Failed ||
+           status == scheduler::core::TaskStatus::Cancelled;
 }
 
 std::vector<DependencyGraph::Dependency> JobScheduler::buildDependencies(
@@ -153,16 +198,28 @@ void JobScheduler::scheduleTasks(scheduler::core::JobId jobId,
                 executeScheduledTask(jobId, taskId);
             });
         } catch (const std::exception&) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            const auto state = getJobStateLocked(jobId);
-            if (!state || state->terminal) {
-                continue;
+            std::optional<scheduler::core::Job> jobSnapshot;
+            bool shouldNotify = false;
+
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                const auto state = getJobStateLocked(jobId);
+                if (!state || state->terminal) {
+                    continue;
+                }
+
+                state->job.setStatus(scheduler::core::JobStatus::Failed);
+                state->terminal = true;
+                jobSnapshot = state->job;
+                shouldNotify = true;
             }
 
-            state->job.setStatus(scheduler::core::JobStatus::Failed);
-            state->terminal = true;
-            repository_->updateJob(state->job);
-            condition_.notify_all();
+            if (jobSnapshot) {
+                repository_->updateJob(*jobSnapshot);
+            }
+            if (shouldNotify) {
+                condition_.notify_all();
+            }
         }
     }
 }
@@ -170,6 +227,7 @@ void JobScheduler::scheduleTasks(scheduler::core::JobId jobId,
 void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
                                         scheduler::core::TaskId taskId) {
     scheduler::core::Task localTask{0, "", [] {}};
+    std::optional<scheduler::core::Job> jobSnapshot;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -189,11 +247,17 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
 
         task->setStatus(scheduler::core::TaskStatus::Running);
         localTask = *task;
-        repository_->updateJob(state->job);
+        jobSnapshot = state->job;
+    }
+
+    if (jobSnapshot) {
+        repository_->updateJob(*jobSnapshot);
     }
 
     const auto result = taskExecutor_.execute(localTask);
     std::vector<scheduler::core::TaskId> newlyReadyTasks;
+    std::optional<scheduler::core::Job> updatedJobSnapshot;
+    bool shouldNotify = false;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -216,37 +280,40 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
                 state->terminal = true;
             }
 
-            repository_->updateJob(state->job);
-            condition_.notify_all();
-            return;
-        }
+            updatedJobSnapshot = state->job;
+            shouldNotify = true;
+        } else if (state->terminal) {
+            updatedJobSnapshot = state->job;
+            shouldNotify = true;
+        } else {
+            newlyReadyTasks = state->dependencyGraph.markTaskCompleted(taskId);
+            if (state->remainingTasks > 0) {
+                --state->remainingTasks;
+            }
 
-        if (state->terminal) {
-            repository_->updateJob(state->job);
-            condition_.notify_all();
-            return;
-        }
+            for (const auto readyTaskId : newlyReadyTasks) {
+                if (auto* readyTask = state->job.getTask(readyTaskId)) {
+                    readyTask->setStatus(scheduler::core::TaskStatus::Ready);
+                }
+            }
 
-        newlyReadyTasks = state->dependencyGraph.markTaskCompleted(taskId);
-        if (state->remainingTasks > 0) {
-            --state->remainingTasks;
-        }
+            if (state->remainingTasks == 0) {
+                state->job.setStatus(scheduler::core::JobStatus::Succeeded);
+                state->terminal = true;
+            }
 
-        for (const auto readyTaskId : newlyReadyTasks) {
-            if (auto* readyTask = state->job.getTask(readyTaskId)) {
-                readyTask->setStatus(scheduler::core::TaskStatus::Ready);
+            updatedJobSnapshot = state->job;
+            if (state->terminal || isTerminalStatus(state->job.status())) {
+                shouldNotify = true;
             }
         }
+    }
 
-        if (state->remainingTasks == 0) {
-            state->job.setStatus(scheduler::core::JobStatus::Succeeded);
-            state->terminal = true;
-        }
-
-        repository_->updateJob(state->job);
-        if (state->terminal || isTerminalStatus(state->job.status())) {
-            condition_.notify_all();
-        }
+    if (updatedJobSnapshot) {
+        repository_->updateJob(*updatedJobSnapshot);
+    }
+    if (shouldNotify) {
+        condition_.notify_all();
     }
 
     if (!newlyReadyTasks.empty()) {

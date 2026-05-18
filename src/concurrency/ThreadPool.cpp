@@ -18,11 +18,9 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::submit(std::function<void()> task) {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (shutdown_) {
-            throw std::runtime_error("thread pool is shut down");
-        }
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (shutdown_) {
+        throw std::runtime_error("thread pool is shut down");
     }
 
     tasks_.push(std::move(task));
@@ -36,9 +34,8 @@ void ThreadPool::shutdown() {
         }
 
         shutdown_ = true;
+        tasks_.shutdown();
     }
-
-    tasks_.shutdown();
 
     for (auto& worker : workers_) {
         if (worker.joinable()) {

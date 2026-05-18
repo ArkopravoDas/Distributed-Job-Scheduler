@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
+#include <future>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -159,6 +160,32 @@ void CycleFailsJob() {
     scheduler.shutdown();
 }
 
+void ShutdownUnblocksWaiters() {
+    auto repository = std::make_shared<InMemoryJobRepository>();
+    JobScheduler scheduler{repository, 1};
+
+    Job job{6, "shutdown"};
+    job.addTask(Task{1, "task-1", [] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    }});
+    job.addTask(Task{2, "task-2", [] {}});
+    job.addDependency(2, 1);
+
+    scheduler.submitJob(std::move(job));
+
+    auto waiter = std::async(std::launch::async, [&scheduler] {
+        scheduler.waitForJob(6);
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    scheduler.shutdown();
+
+    expect(waiter.wait_for(std::chrono::seconds(1)) == std::future_status::ready,
+           "waitForJob should unblock when shutdown resolves the job");
+    expect(scheduler.getJobStatus(6) != JobStatus::Running,
+           "job should reach a terminal status after shutdown");
+}
+
 void runTest(const char* name, void (*test)()) {
     test();
     std::cout << "[PASS] " << name << '\n';
@@ -173,6 +200,7 @@ int main() {
         runTest("DiamondDependencyRunsCorrectly", &DiamondDependencyRunsCorrectly);
         runTest("FailedTaskFailsJob", &FailedTaskFailsJob);
         runTest("CycleFailsJob", &CycleFailsJob);
+        runTest("ShutdownUnblocksWaiters", &ShutdownUnblocksWaiters);
     } catch (const std::exception& ex) {
         std::cerr << "[FAIL] " << ex.what() << '\n';
         return 1;
