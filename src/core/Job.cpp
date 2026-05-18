@@ -29,6 +29,8 @@ void Job::addTask(Task task) {
     auto [it, inserted] = tasks_.insert_or_assign(taskId, std::move(task));
     if (inserted) {
         taskOrder_.push_back(it->first);
+    } else {
+        hasDuplicateTaskIds_ = true;
     }
 }
 
@@ -60,6 +62,10 @@ void Job::addDependency(TaskId task, TaskId dependsOn) {
 
 const Job::DependencyMap& Job::dependencies() const noexcept {
     return dependencies_;
+}
+
+bool Job::hasDuplicateTaskIds() const noexcept {
+    return hasDuplicateTaskIds_;
 }
 
 }  // namespace scheduler::core

@@ -26,6 +26,7 @@ public:
     std::vector<TaskId> getAllTaskIds() const;
     void addDependency(TaskId task, TaskId dependsOn);
     const DependencyMap& dependencies() const noexcept;
+    bool hasDuplicateTaskIds() const noexcept;
 
 private:
     JobId id_;
@@ -34,6 +35,7 @@ private:
     std::unordered_map<TaskId, Task> tasks_;
     std::vector<TaskId> taskOrder_;
     DependencyMap dependencies_;
+    bool hasDuplicateTaskIds_{false};
 };
 
 }  // namespace scheduler::core

@@ -46,7 +46,8 @@ void JobScheduler::submitJob(scheduler::core::Job job) {
         jobs_.emplace(jobId, state);
         jobToSave = state->job;
 
-        if (state->dependencyGraph.hasCycle()) {
+        if (state->job.hasDuplicateTaskIds() || hasInvalidDependencies(state->job) ||
+            state->dependencyGraph.hasCycle()) {
             state->job.setStatus(scheduler::core::JobStatus::Failed);
             state->terminal = true;
             jobToPersist = state->job;
@@ -175,6 +176,22 @@ bool JobScheduler::isTerminalTaskStatus(scheduler::core::TaskStatus status) {
     return status == scheduler::core::TaskStatus::Succeeded ||
            status == scheduler::core::TaskStatus::Failed ||
            status == scheduler::core::TaskStatus::Cancelled;
+}
+
+bool JobScheduler::hasInvalidDependencies(const scheduler::core::Job& job) const {
+    for (const auto& [taskId, prerequisites] : job.dependencies()) {
+        if (job.getTask(taskId) == nullptr) {
+            return true;
+        }
+
+        for (const auto prerequisiteId : prerequisites) {
+            if (job.getTask(prerequisiteId) == nullptr) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 std::vector<DependencyGraph::Dependency> JobScheduler::buildDependencies(
