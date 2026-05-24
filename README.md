@@ -6,7 +6,7 @@ A C++20 learning-oriented job scheduler that currently runs jobs in a single pro
 
 The project models a `Job` as a collection of `Task` objects plus dependency relationships between them. A `JobScheduler` uses a dependency graph to find ready tasks, runs them through a local thread pool, updates job/task state, and marks jobs as succeeded, failed, or cancelled.
 
-This repository is not distributed yet. The current implementation is a solid local foundation for a future coordinator/worker design.
+This repository now includes a small in-process distributed mode on top of the local scheduler foundation. It is intentionally simple and keeps the existing single-machine path intact.
 
 ## Implemented Features
 
@@ -20,6 +20,7 @@ This repository is not distributed yet. The current implementation is a solid lo
 - basic cooperative timeout detection for tasks
 - `DependencyGraph` for dependency-aware readiness tracking
 - `JobScheduler` for submitting jobs, waiting for completion, querying task/job status, and graceful shutdown
+- initial distributed mode with coordinator/worker registration, heartbeats, remote task assignment, result reporting, and dead-worker rescheduling
 - Failure handling for:
   - task exceptions
   - dependency cycles
@@ -31,6 +32,9 @@ This repository is not distributed yet. The current implementation is a solid lo
   - simple independent tasks
   - dependency execution flow
   - failure handling
+- Distributed components for:
+  - coordinator-side job submission and ready-task assignment
+  - worker-side polling, execution by task name, and result reporting
 - Focused automated test executables for:
   - scheduler flow
   - retry support
@@ -167,12 +171,15 @@ The script writes results to `benchmarks/results.csv`.
 ## Current Limitations
 
 - The scheduler runs in a single process only
+- Distributed execution is still in-process and transport is text-based only
+- Distributed workers execute tasks by task name through locally registered handlers; task code is not shipped over the wire
 - Storage is in-memory only and not persistent
 - There is no network transport, RPC, or cluster coordination
 - Jobs are not recoverable after process restart
 - Retry support is basic: failed or timed out tasks can be retried up to `maxRetries`, but backoff and richer retry policies are not implemented yet
 - Timeout handling is cooperative only: a task is marked timed out after it returns if its runtime exceeded the configured timeout
 - Running work is not forcibly interrupted or killed when a timeout is exceeded
+- Dead-worker recovery is effectively at-least-once: if a worker is declared dead while still finishing a task, the coordinator may reschedule that task before the stale worker result arrives
 - Cancellation is only used during scheduler shutdown; user-driven cancellation is not implemented
 - There is no priority scheduling, rate limiting, or backpressure policy
 - No external API, CLI, or service interface exists yet

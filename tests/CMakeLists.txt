@@ -74,3 +74,25 @@ target_link_libraries(test_failure_cases
 )
 
 add_test(NAME test_failure_cases COMMAND $<TARGET_FILE:test_failure_cases>)
+
+add_executable(test_worker_registry
+    test_worker_registry.cpp
+)
+
+target_link_libraries(test_worker_registry
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_worker_registry COMMAND $<TARGET_FILE:test_worker_registry>)
+
+add_executable(test_distributed_mode
+    test_distributed_mode.cpp
+)
+
+target_link_libraries(test_distributed_mode
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_distributed_mode COMMAND $<TARGET_FILE:test_distributed_mode>)

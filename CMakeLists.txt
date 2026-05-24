@@ -12,6 +12,9 @@ add_library(scheduler_core
     src/concurrency/ThreadPool.cpp
     src/core/Task.cpp
     src/core/Job.cpp
+    src/distributed/CoordinatorServer.cpp
+    src/distributed/WorkerClient.cpp
+    src/distributed/WorkerRegistry.cpp
     src/execution/TaskExecutor.cpp
     src/scheduling/DependencyGraph.cpp
     src/scheduling/JobScheduler.cpp
@@ -25,6 +28,12 @@ target_link_libraries(scheduler_core PUBLIC Threads::Threads)
 
 add_executable(scheduler_app app/main.cpp)
 target_link_libraries(scheduler_app PRIVATE scheduler_core)
+
+add_executable(coordinator_app app/coordinator_main.cpp)
+target_link_libraries(coordinator_app PRIVATE scheduler_core)
+
+add_executable(worker_app app/worker_main.cpp)
+target_link_libraries(worker_app PRIVATE scheduler_core)
 
 add_executable(example_simple_job examples/simple_job.cpp)
 target_link_libraries(example_simple_job PRIVATE scheduler_core)
