@@ -135,6 +135,35 @@ cmake --build build --target example_simple_job
 ./scripts/run_demo.sh
 ```
 
+## Benchmark
+
+The repository includes a simple benchmark harness that exercises the local scheduler with:
+
+- `100` independent tasks
+- `1000` independent tasks
+- a chain dependency of `100` tasks
+- a `diamond_batch` dependency graph of `100` tasks
+
+For each scenario, the harness runs worker counts `1`, `2`, `4`, and `8`, and records:
+
+- total completion time
+- tasks per second
+- worker count
+
+### Windows PowerShell
+
+```powershell
+python .\benchmarks\benchmark_scheduler.py
+```
+
+### Bash
+
+```bash
+python benchmarks/benchmark_scheduler.py
+```
+
+The script writes results to `benchmarks/results.csv`.
+
 ## Current Limitations
 
 - The scheduler runs in a single process only

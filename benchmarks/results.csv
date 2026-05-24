@@ -1,0 +1,17 @@
+scenario,task_count,worker_count,status,total_ms,tasks_per_second
+independent,100,1,Succeeded,1576,63.45
+independent,100,2,Succeeded,799,125.16
+independent,100,4,Succeeded,393,254.45
+independent,100,8,Succeeded,201,497.51
+independent,1000,1,Succeeded,16455,60.77
+independent,1000,2,Succeeded,8196,122.01
+independent,1000,4,Succeeded,4110,243.31
+independent,1000,8,Succeeded,2129,469.70
+chain,100,1,Succeeded,1612,62.03
+chain,100,2,Succeeded,1606,62.27
+chain,100,4,Succeeded,1680,59.52
+chain,100,8,Succeeded,1618,61.80
+diamond_batch,100,1,Succeeded,1622,61.65
+diamond_batch,100,2,Succeeded,787,127.06
+diamond_batch,100,4,Succeeded,393,254.45
+diamond_batch,100,8,Succeeded,199,502.51
