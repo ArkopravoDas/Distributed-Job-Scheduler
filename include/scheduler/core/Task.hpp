@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -11,7 +12,11 @@ namespace scheduler::core {
 
 class Task {
 public:
-    Task(TaskId id, std::string name, std::function<void()> action, std::size_t maxRetries = 0);
+    Task(TaskId id,
+         std::string name,
+         std::function<void()> action,
+         std::size_t maxRetries = 0,
+         std::chrono::milliseconds timeout = std::chrono::milliseconds{0});
 
     TaskId id() const noexcept;
     const std::string& name() const noexcept;
@@ -19,6 +24,7 @@ public:
     void setStatus(TaskStatus status) noexcept;
     std::size_t retryCount() const noexcept;
     std::size_t maxRetries() const noexcept;
+    std::chrono::milliseconds timeout() const noexcept;
     void incrementRetryCount() noexcept;
     void execute();
 
@@ -28,6 +34,7 @@ private:
     TaskStatus status_{TaskStatus::Pending};
     std::size_t retryCount_{0};
     std::size_t maxRetries_{0};
+    std::chrono::milliseconds timeout_{0};
     std::function<void()> action_;
 };
 

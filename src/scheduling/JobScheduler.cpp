@@ -273,6 +273,7 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
 
     const auto result = taskExecutor_.execute(localTask);
     std::vector<scheduler::core::TaskId> newlyReadyTasks;
+    std::vector<scheduler::core::TaskId> retryTasks;
     std::optional<scheduler::core::Job> updatedJobSnapshot;
     bool shouldNotify = false;
 
@@ -288,10 +289,13 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
             return;
         }
 
-        task->setStatus(result.success ? scheduler::core::TaskStatus::Succeeded
-                                       : scheduler::core::TaskStatus::Failed);
-
-        if (!result.success) {
+        if (!result.success && task->retryCount() < task->maxRetries() && !state->terminal) {
+            task->incrementRetryCount();
+            task->setStatus(scheduler::core::TaskStatus::Ready);
+            retryTasks.push_back(taskId);
+            updatedJobSnapshot = state->job;
+        } else if (!result.success) {
+            task->setStatus(scheduler::core::TaskStatus::Failed);
             if (!state->terminal) {
                 state->job.setStatus(scheduler::core::JobStatus::Failed);
                 state->terminal = true;
@@ -300,9 +304,11 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
             updatedJobSnapshot = state->job;
             shouldNotify = true;
         } else if (state->terminal) {
+            task->setStatus(scheduler::core::TaskStatus::Succeeded);
             updatedJobSnapshot = state->job;
             shouldNotify = true;
         } else {
+            task->setStatus(scheduler::core::TaskStatus::Succeeded);
             newlyReadyTasks = state->dependencyGraph.markTaskCompleted(taskId);
             if (state->remainingTasks > 0) {
                 --state->remainingTasks;
@@ -333,6 +339,9 @@ void JobScheduler::executeScheduledTask(scheduler::core::JobId jobId,
         condition_.notify_all();
     }
 
+    if (!retryTasks.empty()) {
+        scheduleTasks(jobId, retryTasks);
+    }
     if (!newlyReadyTasks.empty()) {
         scheduleTasks(jobId, newlyReadyTasks);
     }

@@ -16,6 +16,8 @@ This repository is not distributed yet. The current implementation is a solid lo
 - Header-only `BlockingQueue<T>`
 - Local `ThreadPool`
 - `TaskExecutor` with duration and error capture
+- basic retry support using `retryCount` and `maxRetries`
+- basic cooperative timeout detection for tasks
 - `DependencyGraph` for dependency-aware readiness tracking
 - `JobScheduler` for submitting jobs, waiting for completion, querying task/job status, and graceful shutdown
 - Failure handling for:
@@ -29,6 +31,11 @@ This repository is not distributed yet. The current implementation is a solid lo
   - simple independent tasks
   - dependency execution flow
   - failure handling
+- Focused automated test executables for:
+  - scheduler flow
+  - retry support
+  - timeout support
+  - failure cases
 
 ## Architecture
 
@@ -134,7 +141,9 @@ cmake --build build --target example_simple_job
 - Storage is in-memory only and not persistent
 - There is no network transport, RPC, or cluster coordination
 - Jobs are not recoverable after process restart
-- Retry policy exists on `Task`, but automatic retry scheduling is not implemented yet
+- Retry support is basic: failed or timed out tasks can be retried up to `maxRetries`, but backoff and richer retry policies are not implemented yet
+- Timeout handling is cooperative only: a task is marked timed out after it returns if its runtime exceeded the configured timeout
+- Running work is not forcibly interrupted or killed when a timeout is exceeded
 - Cancellation is only used during scheduler shutdown; user-driven cancellation is not implemented
 - There is no priority scheduling, rate limiting, or backpressure policy
 - No external API, CLI, or service interface exists yet

@@ -11,12 +11,22 @@ ExecutionResult TaskExecutor::execute(scheduler::core::Task& task) {
     try {
         task.execute();
 
+        const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime);
+        if (task.timeout().count() > 0 && duration > task.timeout()) {
+            return ExecutionResult{
+                task.id(),
+                false,
+                "Task timed out",
+                duration
+            };
+        }
+
         return ExecutionResult{
             task.id(),
             true,
             "",
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - startTime)
+            duration
         };
     } catch (const std::exception& ex) {
         return ExecutionResult{

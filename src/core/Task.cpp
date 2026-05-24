@@ -4,10 +4,15 @@
 
 namespace scheduler::core {
 
-Task::Task(TaskId id, std::string name, std::function<void()> action, std::size_t maxRetries)
+Task::Task(TaskId id,
+           std::string name,
+           std::function<void()> action,
+           std::size_t maxRetries,
+           std::chrono::milliseconds timeout)
     : id_(id),
       name_(std::move(name)),
       maxRetries_(maxRetries),
+      timeout_(timeout),
       action_(std::move(action)) {}
 
 TaskId Task::id() const noexcept {
@@ -32,6 +37,10 @@ std::size_t Task::retryCount() const noexcept {
 
 std::size_t Task::maxRetries() const noexcept {
     return maxRetries_;
+}
+
+std::chrono::milliseconds Task::timeout() const noexcept {
+    return timeout_;
 }
 
 void Task::incrementRetryCount() noexcept {

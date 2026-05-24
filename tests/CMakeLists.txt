@@ -42,6 +42,28 @@ target_link_libraries(test_job_scheduler
 
 add_test(NAME test_job_scheduler COMMAND $<TARGET_FILE:test_job_scheduler>)
 
+add_executable(test_retry_support
+    test_retry_support.cpp
+)
+
+target_link_libraries(test_retry_support
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_retry_support COMMAND $<TARGET_FILE:test_retry_support>)
+
+add_executable(test_timeout_support
+    test_timeout_support.cpp
+)
+
+target_link_libraries(test_timeout_support
+    PRIVATE
+        scheduler_core
+)
+
+add_test(NAME test_timeout_support COMMAND $<TARGET_FILE:test_timeout_support>)
+
 add_executable(test_failure_cases
     test_failure_cases.cpp
 )
